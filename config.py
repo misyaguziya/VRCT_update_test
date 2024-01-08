@@ -534,7 +534,7 @@ class Config:
         self._PATH_CONFIG = os_path.join(self._LOCAL_PATH, "config.json")
         self._PATH_LOGS = os_path.join(self._LOCAL_PATH, "logs")
         os_makedirs(self._PATH_LOGS, exist_ok=True)
-        self._GITHUB_URL = "https://api.github.com/repos/misyaguziya/VRCT/releases/latest"
+        self._GITHUB_URL = "https://api.github.com/repos/misyaguziya/VRCT_update_test/releases/latest"
         self._BOOTH_URL = "https://misyaguziya.booth.pm/"
         self._DOCUMENTS_URL = "https://mzsoftware.notion.site/VRCT-Documents-be79b7a165f64442ad8f326d86c22246"
         self._MAX_MIC_ENERGY_THRESHOLD = 2000
