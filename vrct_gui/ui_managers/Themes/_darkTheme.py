@@ -35,6 +35,10 @@ def _darkTheme(base_color):
             TEXTBOX_ENTRY_PLACEHOLDER_COLOR = base_color.DARK_500_COLOR,
             TEXTBOX_ENTRY_PLACEHOLDER_DISABLED_COLOR = base_color.DARK_700_COLOR,
 
+            SEND_MESSAGE_BUTTON_BG_COLOR = base_color.DARK_850_COLOR,
+            SEND_MESSAGE_BUTTON_BG_HOVERED_COLOR = base_color.DARK_825_COLOR,
+            SEND_MESSAGE_BUTTON_BG_CLICKED_COLOR = base_color.DARK_900_COLOR,
+
 
             # Sidebar
             SIDEBAR_BG_COLOR = base_color.DARK_850_COLOR,
@@ -54,6 +58,7 @@ def _darkTheme(base_color):
             SF__SWITCH_BOX_DISABLE_BG_COLOR = base_color.PRIMARY_800_COLOR,
 
             SF__SWITCH_BOX_BUTTON_COLOR = base_color.DARK_400_COLOR,
+            SF__SWITCH_BOX_BUTTON_DISABLED_COLOR = base_color.DARK_600_COLOR,
             # It's not working because It overrode internally.
             SF__SWITCH_BOX_BUTTON_HOVERED_COLOR = base_color.DARK_350_COLOR,
 
@@ -86,6 +91,11 @@ def _darkTheme(base_color):
             SLS__OPTIONMENU_HOVERED_BG_COLOR = base_color.DARK_875_COLOR,
             SLS__OPTIONMENU_CLICKED_BG_COLOR = base_color.DARK_900_COLOR,
 
+            SLS__DROPDOWN_MENU_WINDOW_BG_COLOR = base_color.DARK_888_COLOR,
+            SLS__DROPDOWN_MENU_WINDOW_BORDER_COLOR = base_color.DARK_650_COLOR,
+            SLS__DROPDOWN_MENU_BG_COLOR = base_color.DARK_888_COLOR,
+            SLS__DROPDOWN_MENU_HOVERED_BG_COLOR = base_color.DARK_825_COLOR,
+            SLS__DROPDOWN_MENU_CLICKED_BG_COLOR = base_color.DARK_900_COLOR,
 
             CONFIG_BUTTON_BG_COLOR = base_color.DARK_850_COLOR,
             CONFIG_BUTTON_HOVERED_BG_COLOR = base_color.DARK_800_COLOR,
@@ -206,14 +216,24 @@ def _darkTheme(base_color):
             SB__SLIDER_TOOLTIP_TEXT_COLOR = base_color.DARK_200_COLOR,
 
             SB__SWITCH_BOX_BG_COLOR = base_color.DARK_800_COLOR,
+            SB__SWITCH_BOX_BG_DISABLED_COLOR = base_color.DARK_900_COLOR,
             SB__SWITCH_BOX_ACTIVE_BG_COLOR = base_color.PRIMARY_500_COLOR,
+            SB__SWITCH_BOX_ACTIVE_BG_DISABLED_COLOR = base_color.PRIMARY_700_COLOR,
             SB__SWITCH_BOX_BUTTON_COLOR = base_color.DARK_400_COLOR,
+            SB__SWITCH_BOX_BUTTON_DISABLED_COLOR = base_color.DARK_700_COLOR,
             SB__SWITCH_BOX_BUTTON_HOVERED_COLOR = base_color.DARK_350_COLOR,
 
             SB__CHECKBOX_BORDER_COLOR = base_color.DARK_600_COLOR,
+            SB__CHECKBOX_BORDER_DISABLED_COLOR = base_color.DARK_800_COLOR,
             SB__CHECKBOX_HOVER_COLOR = base_color.DARK_800_COLOR,
             SB__CHECKBOX_CHECKED_COLOR = base_color.PRIMARY_700_COLOR,
             SB__CHECKBOX_CHECKMARK_COLOR = base_color.DARK_BASIC_TEXT_COLOR,
+
+            SB__RADIOBUTTON_TEXT_COLOR = base_color.DARK_300_COLOR,
+            SB__RADIOBUTTON_BORDER_COLOR = base_color.DARK_600_COLOR,
+            SB__RADIOBUTTON_SELECTED_COLOR = base_color.PRIMARY_400_COLOR,
+            SB__RADIOBUTTON_BG_HOVERED_COLOR = base_color.DARK_825_COLOR,
+            SB__RADIOBUTTON_BG_CLICKED_COLOR = base_color.DARK_900_COLOR,
 
             SB__ENTRY_TEXT_COLOR = base_color.DARK_300_COLOR,
             SB__ENTRY_BG_COLOR = base_color.DARK_863_COLOR,
@@ -300,6 +320,8 @@ def _darkTheme(base_color):
             ARROW_LEFT = getImageFileFromUiUtils("arrow_left_white.png"),
             ARROW_LEFT_DISABLED = getImageFileFromUiUtils("arrow_left_disabled.png"),
 
+            SEND_MESSAGE_ICON = getImageFileFromUiUtils("send_message_icon_white.png"),
+            SEND_MESSAGE_ICON_DISABLED = getImageFileFromUiUtils("send_message_icon_black.png"),
             REFRESH_UPDATE_ICON = getImageFileFromUiUtils("refresh_update_icon.png"),
             REFRESH_ICON = getImageFileFromUiUtils("refresh_icon.png"),
             HELP_ICON = getImageFileFromUiUtils("help_icon_white.png"),

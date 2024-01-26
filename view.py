@@ -5,12 +5,10 @@ from tkinter import font as tk_font
 import webbrowser
 import i18n
 
-from languages import selectable_languages
-
-from customtkinter import StringVar, IntVar, BooleanVar, END as CTK_END, get_appearance_mode
+from customtkinter import StringVar, IntVar, BooleanVar, get_appearance_mode
 from vrct_gui.ui_managers import ColorThemeManager, UiScalingManager
 from vrct_gui import vrct_gui
-from utils import callFunctionIfCallable, generatePercentageStringsList, intToPercentageStringsFormatter
+from utils import callFunctionIfCallable, intToPctStr
 
 from config import config
 
@@ -30,7 +28,15 @@ class View():
             ui_scaling=config.UI_SCALING,
             font_family=config.FONT_FAMILY,
             ui_language=config.UI_LANGUAGE,
+            is_reset_button_displayed_for_translation=config.IS_RESET_BUTTON_DISPLAYED_FOR_TRANSLATION,
         )
+
+        if config.ENABLE_SPEAKER2CHATBOX is False:
+            VERSION_TEXT=i18n.t("config_window.version", version=config.VERSION)
+        else:
+            VERSION_TEXT=i18n.t("config_window.version", version=config.VERSION) + " (Speaker2Chatbox)"
+
+        self.TEXT_TRANSLATOR_CTRANSLATE2 = i18n.t("main_window.translator") + ": " + i18n.t("main_window.translator_ctranslate2")
 
         self.settings = SimpleNamespace()
         theme = get_appearance_mode() if config.APPEARANCE_THEME == "System" else config.APPEARANCE_THEME
@@ -45,6 +51,13 @@ class View():
         self.settings.main = SimpleNamespace(
             ctm=all_ctm.main,
             uism=all_uism.main,
+            geometry=SimpleNamespace(
+                width=config.MAIN_WINDOW_GEOMETRY["width"],
+                height=config.MAIN_WINDOW_GEOMETRY["height"],
+                x_pos=config.MAIN_WINDOW_GEOMETRY["x_pos"],
+                y_pos=config.MAIN_WINDOW_GEOMETRY["y_pos"],
+            ),
+            to_restore_main_window_geometry=config.ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY,
             **common_args
         )
 
@@ -77,6 +90,12 @@ class View():
             **common_args
         )
 
+        self.settings.dropdown_menu_window = SimpleNamespace(
+            # ctm=all_ctm.dropdown_menu_window,
+            uism=all_uism.dropdown_menu_window,
+            **common_args
+        )
+
         self.view_variable = SimpleNamespace(
             # Common
             CALLBACK_RESTART_SOFTWARE=None,
@@ -84,9 +103,12 @@ class View():
             CALLBACK_OPEN_FILEPATH_LOGS=None,
             CALLBACK_OPEN_FILEPATH_CONFIG_FILE=None,
 
-            CALLBACK_QUIT_VRCT=vrct_gui._quitVRCT,
+            CALLBACK_DELETE_MAIN_WINDOW=self.quitVRCT,
+            CALLBACK_QUIT_VRCT=None,
 
             CALLBACK_WHEN_DETECT_WINDOW_OVERED_SIZE=self._showDisplayOverUiSizeConfirmationModal,
+
+            IS_ENTRY_MESSAGE_BOX_DISABLED=False,
 
             # Confirmation Modal
             CALLBACK_HIDE_CONFIRMATION_MODAL=None,
@@ -135,21 +157,24 @@ class View():
             CALLBACK_SELECTED_LANGUAGE_PRESET_TAB=None,
 
             VAR_LABEL_YOUR_LANGUAGE=StringVar(value=i18n.t("main_window.your_language")),
-            VAR_YOUR_LANGUAGE = StringVar(value="Japanese\n(Japan)"),
+            VAR_YOUR_LANGUAGE = StringVar(value=f"{config.SOURCE_LANGUAGE}\n({config.SOURCE_COUNTRY})"),
             CALLBACK_OPEN_SELECTABLE_YOUR_LANGUAGE_WINDOW=None,
             IS_OPENED_SELECTABLE_YOUR_LANGUAGE_WINDOW=False,
             CALLBACK_SELECTED_YOUR_LANGUAGE=None,
 
-            VAR_LABEL_BOTH_DIRECTION_DESC=StringVar(value=i18n.t("main_window.both_direction_desc")),
-            VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON=StringVar(value=i18n.t("main_window.swap_button_label")),
+            VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON=StringVar(value=""),
             CALLBACK_SWAP_LANGUAGES=None,
+            CALLBACK_ENTERED_SWAP_LANGUAGES_BUTTON=self._enteredSwapLanguagesButton,
+            CALLBACK_LEAVED_SWAP_LANGUAGES_BUTTON=self._leavedSwapLanguagesButton,
 
             VAR_LABEL_TARGET_LANGUAGE=StringVar(value=i18n.t("main_window.target_language")),
-            VAR_TARGET_LANGUAGE = StringVar(value="English\n(United States)"),
+            VAR_TARGET_LANGUAGE = StringVar(value=f"{config.TARGET_LANGUAGE}\n({config.TARGET_COUNTRY})"),
             CALLBACK_OPEN_SELECTABLE_TARGET_LANGUAGE_WINDOW=None,
             IS_OPENED_SELECTABLE_TARGET_LANGUAGE_WINDOW=False,
             CALLBACK_SELECTED_TARGET_LANGUAGE=None,
 
+            VAR_SELECTED_TRANSLATION_ENGINE = StringVar(value="Translator: INIT"),
+            CALLBACK_SELECTED_TRANSLATION_ENGINE = None,
 
             VAR_LABEL_TEXTBOX_ALL=StringVar(value=i18n.t("main_window.textbox_tab_all")),
             VAR_LABEL_TEXTBOX_SENT=StringVar(value=i18n.t("main_window.textbox_tab_sent")),
@@ -172,12 +197,12 @@ class View():
             ACTIVE_SETTING_BOX_TAB_ATTR_NAME="side_menu_tab_appearance",
             CALLBACK_SELECTED_SETTING_BOX_TAB=None,
             VAR_ERROR_MESSAGE=StringVar(value=""),
-            VAR_VERSION=StringVar(value=i18n.t("config_window.version", version=config.VERSION)),
+            VAR_VERSION=StringVar(value=VERSION_TEXT),
             VAR_CONFIG_WINDOW_TITLE=StringVar(value=i18n.t("config_window.config_title")),
             VAR_CONFIG_WINDOW_COMPACT_MODE_LABEL=StringVar(value=i18n.t("config_window.compact_mode")),
             VAR_CONFIG_WINDOW_RESTART_BUTTON_LABEL=StringVar(value=i18n.t("config_window.restart_message")),
 
-            CALLBACK_SLIDER_TOOLTIP_PERCENTAGE_FORMATTER=intToPercentageStringsFormatter,
+            CALLBACK_SLIDER_TOOLTIP_PERCENTAGE_FORMATTER=intToPctStr,
 
 
             # Side Menu Labels
@@ -194,7 +219,7 @@ class View():
             # Appearance Tab
             VAR_LABEL_TRANSPARENCY=StringVar(value=i18n.t("config_window.transparency.label")),
             VAR_DESC_TRANSPARENCY=StringVar(value=i18n.t("config_window.transparency.desc")),
-            SLIDER_RANGE_TRANSPARENCY=(50, 100),
+            SLIDER_RANGE_TRANSPARENCY=config.TRANSPARENCY_RANGE,
             CALLBACK_SET_TRANSPARENCY=None,
             VAR_TRANSPARENCY=IntVar(value=config.TRANSPARENCY),
             CALLBACK_BUTTON_PRESS_TRANSPARENCY=self._closeTheCoverOfMainWindow,
@@ -202,23 +227,31 @@ class View():
 
             VAR_LABEL_APPEARANCE_THEME=StringVar(value=i18n.t("config_window.appearance_theme.label")),
             VAR_DESC_APPEARANCE_THEME=StringVar(value=i18n.t("config_window.appearance_theme.desc")),
-            LIST_APPEARANCE_THEME=["Light", "Dark", "System"],
+            LIST_APPEARANCE_THEME=config.APPEARANCE_THEME_LIST,
             CALLBACK_SET_APPEARANCE_THEME=None,
             VAR_APPEARANCE_THEME=StringVar(value=config.APPEARANCE_THEME),
 
             VAR_LABEL_UI_SCALING=StringVar(value=i18n.t("config_window.ui_size.label")),
             VAR_DESC_UI_SCALING=None,
-            LIST_UI_SCALING=generatePercentageStringsList(start=40,end=200, step=10),
+            LIST_UI_SCALING=config.UI_SCALING_LIST,
             CALLBACK_SET_UI_SCALING=None,
             VAR_UI_SCALING=StringVar(value=config.UI_SCALING),
 
             VAR_LABEL_TEXTBOX_UI_SCALING=StringVar(value=i18n.t("config_window.textbox_ui_size.label")),
             VAR_DESC_TEXTBOX_UI_SCALING=StringVar(value=i18n.t("config_window.textbox_ui_size.desc")),
-            SLIDER_RANGE_TEXTBOX_UI_SCALING=(50, 200),
+            SLIDER_RANGE_TEXTBOX_UI_SCALING=config.TEXTBOX_UI_SCALING_RANGE,
             CALLBACK_SET_TEXTBOX_UI_SCALING=None,
             VAR_TEXTBOX_UI_SCALING=IntVar(value=config.TEXTBOX_UI_SCALING),
             CALLBACK_BUTTON_PRESS_TEXTBOX_UI_SCALING=self._closeTheCoverOfMainWindow,
             CALLBACK_BUTTON_RELEASE_TEXTBOX_UI_SCALING=self._openTheCoverOfMainWindow,
+
+            VAR_LABEL_MESSAGE_BOX_RATIO=StringVar(value=i18n.t("config_window.message_box_ratio.label")),
+            VAR_DESC_MESSAGE_BOX_RATIO=StringVar(value=i18n.t("config_window.message_box_ratio.desc")),
+            SLIDER_RANGE_MESSAGE_BOX_RATIO=config.MESSAGE_BOX_RATIO_RANGE,
+            CALLBACK_SET_MESSAGE_BOX_RATIO=None,
+            VAR_MESSAGE_BOX_RATIO=IntVar(value=config.MESSAGE_BOX_RATIO),
+            CALLBACK_BUTTON_PRESS_MESSAGE_BOX_RATIO=self._closeTheCoverOfMainWindow,
+            CALLBACK_BUTTON_RELEASE_MESSAGE_BOX_RATIO=self._openTheCoverOfMainWindow,
 
             VAR_LABEL_FONT_FAMILY=StringVar(value=i18n.t("config_window.font_family.label")),
             VAR_DESC_FONT_FAMILY=None,
@@ -228,14 +261,34 @@ class View():
 
             VAR_LABEL_UI_LANGUAGE=StringVar(value=i18n.t("config_window.ui_language.label")),
             VAR_DESC_UI_LANGUAGE=None,
-            LIST_UI_LANGUAGE=list(selectable_languages.values()),
+            LIST_UI_LANGUAGE=list(config.SELECTABLE_UI_LANGUAGES_DICT.values()),
             CALLBACK_SET_UI_LANGUAGE=None,
-            VAR_UI_LANGUAGE=StringVar(value=selectable_languages[config.UI_LANGUAGE]),
+            VAR_UI_LANGUAGE=StringVar(value=config.SELECTABLE_UI_LANGUAGES_DICT[config.UI_LANGUAGE]),
 
+            VAR_LABEL_ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY=StringVar(value=i18n.t("config_window.to_restore_main_window_geometry.label")),
+            VAR_DESC_ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY=StringVar(value=i18n.t("config_window.to_restore_main_window_geometry.desc")),
+            CALLBACK_SET_ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY=None,
+            VAR_ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY=BooleanVar(value=config.ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY),
 
             # Translation Tab
-            VAR_LABEL_DEEPL_AUTH_KEY=StringVar(value=i18n.t("config_window.deepl_auth_key.label")),
-            VAR_DESC_DEEPL_AUTH_KEY=None,
+            VAR_LABEL_USE_TRANSLATION_FEATURE=StringVar(value=i18n.t("config_window.use_translation_feature.label")),
+            VAR_DESC_USE_TRANSLATION_FEATURE=StringVar(value=i18n.t("config_window.use_translation_feature.desc")),
+            CALLBACK_SET_USE_TRANSLATION_FEATURE=None,
+            VAR_USE_TRANSLATION_FEATURE=BooleanVar(value=config.USE_TRANSLATION_FEATURE),
+
+            VAR_LABEL_CTRANSLATE2_WEIGHT_TYPE=StringVar(value=i18n.t("config_window.ctranslate2_weight_type.label")),
+            VAR_DESC_CTRANSLATE2_WEIGHT_TYPE=StringVar(value=i18n.t("config_window.ctranslate2_weight_type.desc")),
+            DICT_CTRANSLATE2_WEIGHT_TYPE=self.getSelectableCtranslate2WeightTypeDict(),
+            CALLBACK_SET_CTRANSLATE2_WEIGHT_TYPE=None,
+            VAR_CTRANSLATE2_WEIGHT_TYPE=StringVar(value=self.getSelectableCtranslate2WeightTypeDict()[config.WEIGHT_TYPE]),
+
+            VAR_LABEL_DEEPL_AUTH_KEY=StringVar(value=i18n.t( "config_window.deepl_auth_key.label")),
+            VAR_DESC_DEEPL_AUTH_KEY=StringVar(
+                value=i18n.t(
+                    "config_window.deepl_auth_key.desc",
+                    translator=i18n.t("main_window.translator")
+                )
+            ),
             CALLBACK_SET_DEEPL_AUTH_KEY=None,
             VAR_DEEPL_AUTH_KEY=StringVar(value=config.AUTH_KEYS["DeepL_API"]),
 
@@ -334,6 +387,21 @@ class View():
             CALLBACK_SET_ENABLE_AUTO_CLEAR_MESSAGE_BOX=None,
             VAR_ENABLE_AUTO_CLEAR_MESSAGE_BOX=BooleanVar(value=config.ENABLE_AUTO_CLEAR_MESSAGE_BOX),
 
+            VAR_LABEL_ENABLE_SEND_ONLY_TRANSLATED_MESSAGES=StringVar(value=i18n.t("config_window.send_only_translated_messages.label")),
+            VAR_DESC_ENABLE_SEND_ONLY_TRANSLATED_MESSAGES=None,
+            CALLBACK_SET_ENABLE_SEND_ONLY_TRANSLATED_MESSAGES=None,
+            VAR_ENABLE_SEND_ONLY_TRANSLATED_MESSAGES=BooleanVar(value=config.ENABLE_SEND_ONLY_TRANSLATED_MESSAGES),
+
+            VAR_LABEL_SEND_MESSAGE_BUTTON_TYPE=StringVar(value=i18n.t("config_window.send_message_button_type.label")),
+            VAR_DESC_SEND_MESSAGE_BUTTON_TYPE=None,
+            CALLBACK_SET_SEND_MESSAGE_BUTTON_TYPE=None,
+            VAR_SEND_MESSAGE_BUTTON_TYPE=StringVar(value=config.SEND_MESSAGE_BUTTON_TYPE),
+            KEYS_VALUES_SEND_MESSAGE_BUTTON_TYPE={
+                "hide": StringVar(value=i18n.t("config_window.send_message_button_type.hide")),
+                "show": StringVar(value=i18n.t("config_window.send_message_button_type.show")),
+                "show_and_disable_enter_key": StringVar(value=i18n.t("config_window.send_message_button_type.show_and_disable_enter_key")),
+            },
+
             VAR_LABEL_ENABLE_NOTICE_XSOVERLAY=StringVar(value=i18n.t("config_window.notice_xsoverlay.label")),
             VAR_DESC_ENABLE_NOTICE_XSOVERLAY=StringVar(value=i18n.t("config_window.notice_xsoverlay.desc")),
             CALLBACK_SET_ENABLE_NOTICE_XSOVERLAY=None,
@@ -345,31 +413,77 @@ class View():
             VAR_ENABLE_AUTO_EXPORT_MESSAGE_LOGS=BooleanVar(value=config.ENABLE_LOGGER),
 
 
-            VAR_LABEL_MESSAGE_FORMAT=StringVar(value=i18n.t("config_window.message_format.label")),
-            VAR_DESC_MESSAGE_FORMAT=StringVar(value=i18n.t("config_window.message_format.desc")),
-            CALLBACK_SET_MESSAGE_FORMAT=None,
-            CALLBACK_SWAP_MESSAGE_FORMAT_REQUIRED_TEXT=self._swapMessageFormatRequiredText,
-            VAR_MESSAGE_FORMAT=StringVar(value=config.MESSAGE_FORMAT),
-            VAR_LABEL_EXAMPLE_TEXT_MESSAGE_FORMAT=StringVar(value=""),
-            VAR_ENTRY_0_MESSAGE_FORMAT=StringVar(value=""),
-            VAR_ENTRY_1_MESSAGE_FORMAT=StringVar(value=""),
-            VAR_ENTRY_2_MESSAGE_FORMAT=StringVar(value=""),
-            VAR_TEXT_REQUIRED_0_MESSAGE_FORMAT=StringVar(value="[message]"),
-            VAR_TEXT_REQUIRED_1_MESSAGE_FORMAT=StringVar(value="[translation]"),
-            CALLBACK_FOCUS_OUT_MESSAGE_FORMAT=self.callbackBindFocusOut_MessageFormat,
-
-
             VAR_LABEL_ENABLE_SEND_MESSAGE_TO_VRC=StringVar(value=i18n.t("config_window.send_message_to_vrc.label")),
             VAR_DESC_ENABLE_SEND_MESSAGE_TO_VRC=StringVar(value=i18n.t("config_window.send_message_to_vrc.desc")),
             CALLBACK_SET_ENABLE_SEND_MESSAGE_TO_VRC=None,
             VAR_ENABLE_SEND_MESSAGE_TO_VRC=BooleanVar(value=config.ENABLE_SEND_MESSAGE_TO_VRC),
 
-            # [deprecated]
-            # VAR_LABEL_STARTUP_OSC_ENABLED_CHECK=StringVar(value=i18n.t("config_window.startup_osc_enabled_check.label")),
-            # VAR_DESC_STARTUP_OSC_ENABLED_CHECK=StringVar(value=i18n.t("config_window.startup_osc_enabled_check.desc")),
-            # CALLBACK_SET_STARTUP_OSC_ENABLED_CHECK=None,
-            # VAR_STARTUP_OSC_ENABLED_CHECK=BooleanVar(value=config.STARTUP_OSC_ENABLED_CHECK),
 
+
+            VAR_SECOND_TITLE_OTHERS_SEND_MESSAGE_FORMATS=StringVar(value=i18n.t("config_window.side_menu_labels.others_send_message_formats")),
+
+
+            VAR_LABEL_SEND_MESSAGE_FORMAT=StringVar(value=i18n.t("config_window.send_message_format.label")),
+            VAR_DESC_SEND_MESSAGE_FORMAT=StringVar(value=i18n.t("config_window.send_message_format.desc")),
+            CALLBACK_SET_SEND_MESSAGE_FORMAT=None,
+            VAR_SEND_MESSAGE_FORMAT=StringVar(value=config.SEND_MESSAGE_FORMAT),
+            VAR_LABEL_EXAMPLE_TEXT_SEND_MESSAGE_FORMAT=StringVar(value=""),
+            VAR_ENTRY_0_SEND_MESSAGE_FORMAT=StringVar(value=""),
+            VAR_ENTRY_1_SEND_MESSAGE_FORMAT=StringVar(value=""),
+            VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT=StringVar(value="[message]"),
+            CALLBACK_FOCUS_OUT_SEND_MESSAGE_FORMAT=self.callbackBindFocusOut_SendMessageFormat,
+
+
+            VAR_LABEL_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=i18n.t("config_window.send_message_format_with_t.label")),
+            VAR_DESC_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=i18n.t("config_window.send_message_format_with_t.desc")),
+            CALLBACK_SET_SEND_MESSAGE_FORMAT_WITH_T=None,
+            CALLBACK_SWAP_SEND_MESSAGE_FORMAT_WITH_T_REQUIRED_TEXT=self._swapSendMessageFormatWithT_RequiredText,
+            VAR_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=config.SEND_MESSAGE_FORMAT_WITH_T),
+            VAR_LABEL_EXAMPLE_TEXT_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_ENTRY_0_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_ENTRY_1_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_ENTRY_2_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value="[message]"),
+            VAR_TEXT_REQUIRED_1_SEND_MESSAGE_FORMAT_WITH_T=StringVar(value="[translation]"),
+            CALLBACK_FOCUS_OUT_SEND_MESSAGE_FORMAT_WITH_T=self.callbackBindFocusOut_SendMessageFormatWithT,
+
+
+
+            VAR_LABEL_RECEIVED_MESSAGE_FORMAT=StringVar(value=i18n.t("config_window.received_message_format.label")),
+            VAR_DESC_RECEIVED_MESSAGE_FORMAT=StringVar(value=i18n.t("config_window.received_message_format.desc")),
+            CALLBACK_SET_RECEIVED_MESSAGE_FORMAT=None,
+            VAR_RECEIVED_MESSAGE_FORMAT=StringVar(value=config.RECEIVED_MESSAGE_FORMAT),
+            VAR_LABEL_EXAMPLE_TEXT_RECEIVED_MESSAGE_FORMAT=StringVar(value=""),
+            VAR_ENTRY_0_RECEIVED_MESSAGE_FORMAT=StringVar(value=""),
+            VAR_ENTRY_1_RECEIVED_MESSAGE_FORMAT=StringVar(value=""),
+            VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT=StringVar(value="[message]"),
+            CALLBACK_FOCUS_OUT_RECEIVED_MESSAGE_FORMAT=self.callbackBindFocusOut_ReceivedMessageFormat,
+
+
+            VAR_SECOND_TITLE_OTHERS_RECEIVED_MESSAGE_FORMATS=StringVar(value=i18n.t("config_window.side_menu_labels.others_received_message_formats")),
+
+            VAR_LABEL_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=i18n.t("config_window.received_message_format_with_t.label")),
+            VAR_DESC_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=i18n.t("config_window.received_message_format_with_t.desc")),
+            CALLBACK_SET_RECEIVED_MESSAGE_FORMAT_WITH_T=None,
+            CALLBACK_SWAP_RECEIVED_MESSAGE_FORMAT_WITH_T_REQUIRED_TEXT=self._swapReceivedMessageFormatWithT_RequiredText,
+            VAR_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=config.RECEIVED_MESSAGE_FORMAT_WITH_T),
+            VAR_LABEL_EXAMPLE_TEXT_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_ENTRY_0_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_ENTRY_1_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_ENTRY_2_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value=""),
+            VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value="[message]"),
+            VAR_TEXT_REQUIRED_1_RECEIVED_MESSAGE_FORMAT_WITH_T=StringVar(value="[translation]"),
+            CALLBACK_FOCUS_OUT_RECEIVED_MESSAGE_FORMAT_WITH_T=self.callbackBindFocusOut_ReceivedMessageFormatWithT,
+
+
+            # -------------------Speaker2Chatbox-----------
+            VAR_SECOND_TITLE_OTHERS_SPEAKER2CHATBOX=StringVar(value=i18n.t("config_window.side_menu_labels.others_speaker2chatbox")),
+
+            VAR_LABEL_ENABLE_SEND_RECEIVED_MESSAGE_TO_VRC=StringVar(value=i18n.t("config_window.send_received_message_to_vrc.label")),
+            VAR_DESC_ENABLE_SEND_RECEIVED_MESSAGE_TO_VRC=StringVar(value=i18n.t("config_window.send_received_message_to_vrc.desc")),
+            CALLBACK_SET_ENABLE_SEND_RECEIVED_MESSAGE_TO_VRC=None,
+            VAR_ENABLE_SEND_RECEIVED_MESSAGE_TO_VRC=BooleanVar(value=config.ENABLE_SEND_RECEIVED_MESSAGE_TO_VRC),
+            # -------------------Speaker2Chatbox-----------
 
 
 
@@ -404,6 +518,7 @@ class View():
             self.view_variable.CALLBACK_RESTART_SOFTWARE=common_registers.get("callback_restart_software", None)
             self.view_variable.CALLBACK_OPEN_FILEPATH_LOGS=common_registers.get("callback_filepath_logs", None)
             self.view_variable.CALLBACK_OPEN_FILEPATH_CONFIG_FILE=common_registers.get("callback_filepath_config_file", None)
+            self.view_variable.CALLBACK_QUIT_VRCT=common_registers.get("callback_quit_vrct", None)
 
 
         if window_action_registers is not None:
@@ -428,10 +543,23 @@ class View():
 
             self.view_variable.CALLBACK_SELECTED_LANGUAGE_PRESET_TAB = main_window_registers.get("callback_selected_language_preset_tab", None)
 
+            self.view_variable.CALLBACK_SELECTED_TRANSLATION_ENGINE = main_window_registers.get("callback_selected_translation_engine", None)
+
+            def adjustedMessageBoxReturnFunction(_e):
+                if self.view_variable.IS_ENTRY_MESSAGE_BOX_DISABLED is True:
+                    return
+                if config.SEND_MESSAGE_BUTTON_TYPE != "show_and_disable_enter_key":
+                    main_window_registers.get("message_box_bind_Return")()
+                return "break" # For deleting the next line that will be inserted when the Enter key is pressed.
+            def pressedSendMessageButtonFunction(_e):
+                main_window_registers.get("message_box_bind_Return")()
+                vrct_gui.entry_message_box.focus()
 
             entry_message_box = getattr(vrct_gui, "entry_message_box")
-            entry_message_box.bind("<Return>", main_window_registers.get("message_box_bind_Return"))
+            entry_message_box.bind("<Shift-Return>", lambda _e: None) # This is to prevent message sending on Shift + Enter key press and just add a new line.
+            entry_message_box.bind("<Return>", adjustedMessageBoxReturnFunction)
             entry_message_box.bind("<Any-KeyPress>", main_window_registers.get("message_box_bind_Any_KeyPress"))
+            self.view_variable.CALLBACK_CLICKED_SEND_MESSAGE_BUTTON = pressedSendMessageButtonFunction
 
 
             entry_message_box.bind("<FocusIn>", main_window_registers.get("message_box_bind_FocusIn"))
@@ -461,12 +589,16 @@ class View():
             self.view_variable.CALLBACK_SET_APPEARANCE = config_window_registers.get("callback_set_appearance", None)
             self.view_variable.CALLBACK_SET_UI_SCALING = config_window_registers.get("callback_set_ui_scaling", None)
             self.view_variable.CALLBACK_SET_TEXTBOX_UI_SCALING = config_window_registers.get("callback_set_textbox_ui_scaling", None)
+            self.view_variable.CALLBACK_SET_MESSAGE_BOX_RATIO = config_window_registers.get("callback_set_message_box_ratio", None)
             self.view_variable.CALLBACK_SET_FONT_FAMILY = config_window_registers.get("callback_set_font_family", None)
             self.view_variable.CALLBACK_SET_UI_LANGUAGE = config_window_registers.get("callback_set_ui_language", None)
+            self.view_variable.CALLBACK_SET_ENABLE_RESTORE_MAIN_WINDOW_GEOMETRY = config_window_registers.get("callback_set_enable_restore_main_window_geometry", None)
 
 
             # Translation Tab
-            self.view_variable.CALLBACK_SET_DEEPL_AUTHKEY = config_window_registers.get("callback_set_deepl_authkey", None)
+            self.view_variable.CALLBACK_SET_USE_TRANSLATION_FEATURE = config_window_registers.get("callback_set_use_translation_feature", None)
+            self.view_variable.CALLBACK_SET_CTRANSLATE2_WEIGHT_TYPE = config_window_registers.get("callback_set_ctranslate2_weight_type", None)
+            self.view_variable.CALLBACK_SET_DEEPL_AUTH_KEY = config_window_registers.get("callback_set_deepl_auth_key", None)
 
             # Transcription Tab (Mic)
             self.view_variable.CALLBACK_SET_MIC_HOST = config_window_registers.get("callback_set_mic_host", None)
@@ -494,12 +626,23 @@ class View():
 
             # Others Tab
             self.view_variable.CALLBACK_SET_ENABLE_AUTO_CLEAR_MESSAGE_BOX = config_window_registers.get("callback_set_enable_auto_clear_chatbox", None)
+            self.view_variable.CALLBACK_SET_ENABLE_SEND_ONLY_TRANSLATED_MESSAGES = config_window_registers.get("callback_set_send_only_translated_messages", None)
+            self.view_variable.CALLBACK_SET_SEND_MESSAGE_BUTTON_TYPE = config_window_registers.get("callback_set_send_message_button_type", None)
             self.view_variable.CALLBACK_SET_ENABLE_NOTICE_XSOVERLAY = config_window_registers.get("callback_set_enable_notice_xsoverlay", None)
             self.view_variable.CALLBACK_SET_ENABLE_AUTO_EXPORT_MESSAGE_LOGS =  config_window_registers.get("callback_set_enable_auto_export_message_logs", None)
-            self.view_variable.CALLBACK_SET_MESSAGE_FORMAT = config_window_registers.get("callback_set_message_format", None)
 
             self.view_variable.CALLBACK_SET_ENABLE_SEND_MESSAGE_TO_VRC = config_window_registers.get("callback_set_enable_send_message_to_vrc", None)
-            # self.view_variable.CALLBACK_SET_STARTUP_OSC_ENABLED_CHECK = config_window_registers.get("callback_set_startup_osc_enabled_check", None) #[deprecated]
+
+            self.view_variable.CALLBACK_SET_SEND_MESSAGE_FORMAT = config_window_registers.get("callback_set_send_message_format", None)
+            self.view_variable.CALLBACK_SET_SEND_MESSAGE_FORMAT_WITH_T = config_window_registers.get("callback_set_send_message_format_with_t", None)
+            self.view_variable.CALLBACK_SET_RECEIVED_MESSAGE_FORMAT = config_window_registers.get("callback_set_received_message_format", None)
+            self.view_variable.CALLBACK_SET_RECEIVED_MESSAGE_FORMAT_WITH_T = config_window_registers.get("callback_set_received_message_format_with_t", None)
+
+            # Speaker2Chatbox----------------
+            self.view_variable.CALLBACK_SET_ENABLE_SEND_RECEIVED_MESSAGE_TO_VRC = config_window_registers.get("callback_set_enable_send_received_message_to_vrc", None)
+            # Speaker2Chatbox----------------
+
+
 
             # Advanced Settings Tab
             self.view_variable.CALLBACK_SET_OSC_IP_ADDRESS = config_window_registers.get("callback_set_osc_ip_address", None)
@@ -510,6 +653,14 @@ class View():
             self.enableConfigWindowCompactMode()
             vrct_gui.config_window.setting_box_compact_mode_switch_box.select()
 
+        self.setMainWindowMessageBoxRatio(config.MESSAGE_BOX_RATIO)
+
+        if config.USE_TRANSLATION_FEATURE is True:
+            self.useTranslationFeatureProcess("Normal")
+            self.view_variable.VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON.set(i18n.t("main_window.translate_each_other_label"))
+        else:
+            self.view_variable.VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON.set(i18n.t("main_window.swap_button_label"))
+            self.useTranslationFeatureProcess("Disable")
 
         if config.CHOICE_MIC_HOST == "NoHost":
             self.view_variable.VAR_MIC_HOST.set("No Mic Host Detected")
@@ -527,6 +678,13 @@ class View():
             )
             self.replaceMicThresholdCheckButton_Disabled()
 
+        if config.ENABLE_SPEAKER2CHATBOX is False:
+            vrct_gui._changeConfigWindowWidgetsStatus(
+                status="disabled",
+                target_names=[
+                    "sb__checkbox_enable_send_received_message_to_vrc",
+                ]
+            )
 
         if config.INPUT_MIC_DYNAMIC_ENERGY_THRESHOLD is True:
             self.closeMicEnergyThresholdWidget()
@@ -539,55 +697,137 @@ class View():
             self.openSpeakerEnergyThresholdWidget()
 
 
-        self.setMessageFormatEntryWidgets(config.MESSAGE_FORMAT)
+        self.setSendMessageFormat_EntryWidgets(config.SEND_MESSAGE_FORMAT)
+        self.setSendMessageFormatWithT_EntryWidgets(config.SEND_MESSAGE_FORMAT_WITH_T)
+        self.setReceivedMessageFormat_EntryWidgets(config.RECEIVED_MESSAGE_FORMAT)
+        self.setReceivedMessageFormatWithT_EntryWidgets(config.RECEIVED_MESSAGE_FORMAT_WITH_T)
 
         # Insert sample conversation for testing.
         # self._insertSampleConversationToTextbox()
 
-
-    def setMessageFormatEntryWidgets(self, message_format:str):
+# Send Message Format
+    def setSendMessageFormat_EntryWidgets(self, message_format:str):
         result = self.extractMessageFormat(message_format)
 
+        self.view_variable.VAR_ENTRY_0_SEND_MESSAGE_FORMAT.set(result.before)
+        self.view_variable.VAR_ENTRY_1_SEND_MESSAGE_FORMAT.set(result.after)
+        self.updateSendMessageFormat_ExampleTextWidget()
+
+    def updateSendMessageFormat_ExampleTextWidget(self):
+        message = i18n.t("config_window.send_message_format.example_text")
+        example_message = config.SEND_MESSAGE_FORMAT.replace("[message]", message)
+
+        self.view_variable.VAR_LABEL_EXAMPLE_TEXT_SEND_MESSAGE_FORMAT.set(example_message)
+
+
+# Send Message Format With Translation
+    def setSendMessageFormatWithT_EntryWidgets(self, message_format:str):
+        result = self.extractMessageFormatWithT(message_format)
+
         if result.is_message_first is True:
-            self.view_variable.VAR_TEXT_REQUIRED_0_MESSAGE_FORMAT.set("[message]")
-            self.view_variable.VAR_TEXT_REQUIRED_1_MESSAGE_FORMAT.set("[translation]")
+            self.view_variable.VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT_WITH_T.set("[message]")
+            self.view_variable.VAR_TEXT_REQUIRED_1_SEND_MESSAGE_FORMAT_WITH_T.set("[translation]")
         else:
-            self.view_variable.VAR_TEXT_REQUIRED_0_MESSAGE_FORMAT.set("[translation]")
-            self.view_variable.VAR_TEXT_REQUIRED_1_MESSAGE_FORMAT.set("[message]")
+            self.view_variable.VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT_WITH_T.set("[translation]")
+            self.view_variable.VAR_TEXT_REQUIRED_1_SEND_MESSAGE_FORMAT_WITH_T.set("[message]")
 
-        self.view_variable.VAR_ENTRY_0_MESSAGE_FORMAT.set(result.before)
-        self.view_variable.VAR_ENTRY_1_MESSAGE_FORMAT.set(result.between)
-        self.view_variable.VAR_ENTRY_2_MESSAGE_FORMAT.set(result.after)
-        self.updateMessageFormat_ExampleTextWidget()
+        self.view_variable.VAR_ENTRY_0_SEND_MESSAGE_FORMAT_WITH_T.set(result.before)
+        self.view_variable.VAR_ENTRY_1_SEND_MESSAGE_FORMAT_WITH_T.set(result.between)
+        self.view_variable.VAR_ENTRY_2_SEND_MESSAGE_FORMAT_WITH_T.set(result.after)
+        self.updateSendMessageFormatWithT_ExampleTextWidget()
 
-    def _swapMessageFormatRequiredText(self):
-        text_0 = self.view_variable.VAR_TEXT_REQUIRED_0_MESSAGE_FORMAT.get()
-        text_1 = self.view_variable.VAR_TEXT_REQUIRED_1_MESSAGE_FORMAT.get()
-        self.view_variable.VAR_TEXT_REQUIRED_0_MESSAGE_FORMAT.set(text_1)
-        self.view_variable.VAR_TEXT_REQUIRED_1_MESSAGE_FORMAT.set(text_0)
-        self.updateMessageFormat_ExampleTextWidget()
+    def _swapSendMessageFormatWithT_RequiredText(self):
+        text_0 = self.view_variable.VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT_WITH_T.get()
+        text_1 = self.view_variable.VAR_TEXT_REQUIRED_1_SEND_MESSAGE_FORMAT_WITH_T.get()
+        self.view_variable.VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT_WITH_T.set(text_1)
+        self.view_variable.VAR_TEXT_REQUIRED_1_SEND_MESSAGE_FORMAT_WITH_T.set(text_0)
+        self.updateSendMessageFormatWithT_ExampleTextWidget()
 
-        new_message_format = self.getLatestMessageFormatFromWidget()
-        callFunctionIfCallable(self.view_variable.CALLBACK_SET_MESSAGE_FORMAT, new_message_format)
+        new_message_format = self.getLatestMessageFormatWithT_FromWidget()
+        callFunctionIfCallable(self.view_variable.CALLBACK_SET_SEND_MESSAGE_FORMAT_WITH_T, new_message_format)
 
 
-    def getLatestMessageFormatFromWidget(self):
-        text_0 = self.view_variable.VAR_TEXT_REQUIRED_0_MESSAGE_FORMAT.get()
-        text_1 = self.view_variable.VAR_TEXT_REQUIRED_1_MESSAGE_FORMAT.get()
-        entry_0 = self.view_variable.VAR_ENTRY_0_MESSAGE_FORMAT.get()
-        entry_1 = self.view_variable.VAR_ENTRY_1_MESSAGE_FORMAT.get()
-        entry_2 = self.view_variable.VAR_ENTRY_2_MESSAGE_FORMAT.get()
+    def getLatestMessageFormatWithT_FromWidget(self):
+        text_0 = self.view_variable.VAR_TEXT_REQUIRED_0_SEND_MESSAGE_FORMAT_WITH_T.get()
+        text_1 = self.view_variable.VAR_TEXT_REQUIRED_1_SEND_MESSAGE_FORMAT_WITH_T.get()
+        entry_0 = self.view_variable.VAR_ENTRY_0_SEND_MESSAGE_FORMAT_WITH_T.get()
+        entry_1 = self.view_variable.VAR_ENTRY_1_SEND_MESSAGE_FORMAT_WITH_T.get()
+        entry_2 = self.view_variable.VAR_ENTRY_2_SEND_MESSAGE_FORMAT_WITH_T.get()
         return entry_0+text_0+entry_1+text_1+entry_2
 
-    def updateMessageFormat_ExampleTextWidget(self):
-        message = i18n.t("config_window.message_format.example_text", locale=config.UI_LANGUAGE)
+    def updateSendMessageFormatWithT_ExampleTextWidget(self):
+        message = i18n.t("config_window.send_message_format_with_t.example_text", locale=config.UI_LANGUAGE)
         translation_locale = "ja" if config.UI_LANGUAGE == "en" else "en"
-        translation = i18n.t("config_window.message_format.example_text", locale=translation_locale)
+        translation = i18n.t("config_window.send_message_format_with_t.example_text", locale=translation_locale)
 
-        example_message = config.MESSAGE_FORMAT.replace("[message]", message)
+        example_message = config.SEND_MESSAGE_FORMAT_WITH_T.replace("[message]", message)
         example_message = example_message.replace("[translation]", translation)
 
-        self.view_variable.VAR_LABEL_EXAMPLE_TEXT_MESSAGE_FORMAT.set(example_message)
+        self.view_variable.VAR_LABEL_EXAMPLE_TEXT_SEND_MESSAGE_FORMAT_WITH_T.set(example_message)
+
+
+# Received Message Format
+    def setReceivedMessageFormat_EntryWidgets(self, message_format:str):
+        result = self.extractMessageFormat(message_format)
+
+        self.view_variable.VAR_ENTRY_0_RECEIVED_MESSAGE_FORMAT.set(result.before)
+        self.view_variable.VAR_ENTRY_1_RECEIVED_MESSAGE_FORMAT.set(result.after)
+        self.updateReceivedMessageFormat_ExampleTextWidget()
+
+    def updateReceivedMessageFormat_ExampleTextWidget(self):
+        message = i18n.t("config_window.received_message_format.example_text")
+        example_message = config.RECEIVED_MESSAGE_FORMAT.replace("[message]", message)
+
+        self.view_variable.VAR_LABEL_EXAMPLE_TEXT_RECEIVED_MESSAGE_FORMAT.set(example_message)
+
+
+# Received Message Format With Translation
+    def setReceivedMessageFormatWithT_EntryWidgets(self, message_format:str):
+        result = self.extractMessageFormatWithT(message_format)
+
+        if result.is_message_first is True:
+            self.view_variable.VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT_WITH_T.set("[message]")
+            self.view_variable.VAR_TEXT_REQUIRED_1_RECEIVED_MESSAGE_FORMAT_WITH_T.set("[translation]")
+        else:
+            self.view_variable.VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT_WITH_T.set("[translation]")
+            self.view_variable.VAR_TEXT_REQUIRED_1_RECEIVED_MESSAGE_FORMAT_WITH_T.set("[message]")
+
+        self.view_variable.VAR_ENTRY_0_RECEIVED_MESSAGE_FORMAT_WITH_T.set(result.before)
+        self.view_variable.VAR_ENTRY_1_RECEIVED_MESSAGE_FORMAT_WITH_T.set(result.between)
+        self.view_variable.VAR_ENTRY_2_RECEIVED_MESSAGE_FORMAT_WITH_T.set(result.after)
+        self.updateReceivedMessageFormatWithT_ExampleTextWidget()
+
+    def _swapReceivedMessageFormatWithT_RequiredText(self):
+        text_0 = self.view_variable.VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        text_1 = self.view_variable.VAR_TEXT_REQUIRED_1_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        self.view_variable.VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT_WITH_T.set(text_1)
+        self.view_variable.VAR_TEXT_REQUIRED_1_RECEIVED_MESSAGE_FORMAT_WITH_T.set(text_0)
+        self.updateReceivedMessageFormatWithT_ExampleTextWidget()
+
+        new_message_format = self.getLatestReceivedMessageFormatWithT_FromWidget()
+        callFunctionIfCallable(self.view_variable.CALLBACK_SET_RECEIVED_MESSAGE_FORMAT_WITH_T, new_message_format)
+
+
+    def getLatestReceivedMessageFormatWithT_FromWidget(self):
+        text_0 = self.view_variable.VAR_TEXT_REQUIRED_0_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        text_1 = self.view_variable.VAR_TEXT_REQUIRED_1_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        entry_0 = self.view_variable.VAR_ENTRY_0_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        entry_1 = self.view_variable.VAR_ENTRY_1_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        entry_2 = self.view_variable.VAR_ENTRY_2_RECEIVED_MESSAGE_FORMAT_WITH_T.get()
+        return entry_0+text_0+entry_1+text_1+entry_2
+
+    def updateReceivedMessageFormatWithT_ExampleTextWidget(self):
+        message = i18n.t("config_window.received_message_format_with_t.example_text", locale=config.UI_LANGUAGE)
+        translation_locale = "ja" if config.UI_LANGUAGE == "en" else "en"
+        translation = i18n.t("config_window.received_message_format_with_t.example_text", locale=translation_locale)
+
+        example_message = config.RECEIVED_MESSAGE_FORMAT_WITH_T.replace("[message]", message)
+        example_message = example_message.replace("[translation]", translation)
+
+        self.view_variable.VAR_LABEL_EXAMPLE_TEXT_RECEIVED_MESSAGE_FORMAT_WITH_T.set(example_message)
+
+
+
 
 
 # GUI process
@@ -603,7 +843,9 @@ class View():
         vrct_gui._showGUI()
         vrct_gui._startMainLoop()
 
-
+    def quitVRCT(self):
+        callFunctionIfCallable(self.view_variable.CALLBACK_QUIT_VRCT)
+        vrct_gui._quitVRCT()
 
 # Common
     @staticmethod
@@ -617,6 +859,66 @@ class View():
     def openWebPage(url:str):
         webbrowser.open_new_tab(url)
 
+    @staticmethod
+    def getMainWindowGeometry(return_int:bool=False):
+        if return_int is True:
+            return {
+                "width": vrct_gui.winfo_toplevel().winfo_width(),
+                "height": vrct_gui.winfo_toplevel().winfo_height(),
+                "x_pos": vrct_gui.winfo_toplevel().winfo_x(),
+                "y_pos": vrct_gui.winfo_toplevel().winfo_y(),
+            }
+
+        return {
+            "width": str(vrct_gui.winfo_toplevel().winfo_width()),
+            "height": str(vrct_gui.winfo_toplevel().winfo_height()),
+            "x_pos": str(vrct_gui.winfo_toplevel().winfo_x()),
+            "y_pos": str(vrct_gui.winfo_toplevel().winfo_y()),
+        }
+
+    def getPreUiScaling(self):
+        return self.restart_required_configs_pre_data.ui_scaling
+
+    @staticmethod
+    def getSelectableCtranslate2WeightTypeDict():
+        return {
+            config._SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT["Small"]: i18n.t("config_window.ctranslate2_weight_type.small", capacity="418MB"),
+            config._SELECTABLE_CTRANSLATE2_WEIGHT_TYPE_DICT["Large"]: i18n.t("config_window.ctranslate2_weight_type.large", capacity="1.2GB"),
+        }
+
+    def useTranslationFeatureProcess(self, state:str):
+        def changeWidget_UseTranslationFeature():
+            vrct_gui.sls__box_translation_optionmenu_wrapper.grid()
+            vrct_gui.compact_mode_translation_frame.grid()
+            vrct_gui.translation_frame.grid()
+            self.view_variable.VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON.set(i18n.t("main_window.translate_each_other_label"))
+
+        def changeWidget_DontUseTranslationFeature():
+            vrct_gui.sls__box_translation_optionmenu_wrapper.grid_remove()
+            vrct_gui.compact_mode_translation_frame.grid_remove()
+            vrct_gui.translation_frame.grid_remove()
+            self.view_variable.VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON.set(i18n.t("main_window.swap_button_label"))
+
+
+        if state == "Normal":
+            self.setLatestCTranslate2WeightType()
+            self.openCtranslate2WeightTypeWidget()
+            self.setTranslationSwitchStatus("normal", release_locked_state=True)
+            changeWidget_UseTranslationFeature()
+
+        elif state == "Disable":
+            view.closeCtranslate2WeightTypeWidget()
+            view.setTranslationSwitchStatus("disabled", to_lock_state=True)
+            changeWidget_DontUseTranslationFeature()
+
+        elif state == "Restart":
+            view.setLatestCTranslate2WeightType()
+            view.setTranslationSwitchStatus("disabled", to_lock_state=True)
+            changeWidget_UseTranslationFeature()
+
+        vrct_gui.update()
+        vrct_gui.config_window.lift()
+
 
 # Open Webpage Functions
     def openWebPage_Booth(self):
@@ -629,9 +931,16 @@ class View():
 
 # Widget Control
     # Common
+
+    # Note: The difference between _clearEntryBox and _clearTextBox
+    # idk why, but in CTkEntry and CTkTextbox, the first argument for the delete function is different. Otherwise, it throws an error.
     @staticmethod
     def _clearEntryBox(entry_widget):
-        entry_widget.delete(0, CTK_END)
+        entry_widget.delete(0, "end")
+
+    @staticmethod
+    def _clearTextBox(entry_widget):
+        entry_widget.delete("1.0", "end")
 
     def clearErrorMessage(self):
         vrct_gui._clearErrorMessage()
@@ -649,6 +958,9 @@ class View():
     def setMainWindowAllWidgetsStatusToDisabled():
         vrct_gui._changeMainWindowWidgetsStatus("disabled", "All")
 
+    @staticmethod
+    def setTranslationSwitchStatus(status:str, to_lock_state:bool=False, release_locked_state:bool=False):
+        vrct_gui._changeMainWindowWidgetsStatus(status, ["translation_switch"], to_lock_state, release_locked_state)
 
     def enableMainWindowSidebarCompactMode(self):
         self.view_variable.IS_MAIN_WINDOW_SIDEBAR_COMPACT_MODE = True
@@ -657,6 +969,26 @@ class View():
     def disableMainWindowSidebarCompactMode(self):
         self.view_variable.IS_MAIN_WINDOW_SIDEBAR_COMPACT_MODE = False
         vrct_gui._disableMainWindowSidebarCompactMode()
+
+    def changeTranscriptionDisplayStatus(self, status):
+        match (status):
+            case "MIC_ON":
+                vrct_gui.sls__box_your_language_mic_status__enabled.place(relx=0.1, rely=0.2, anchor="center")
+            case "MIC_OFF":
+                vrct_gui.sls__box_your_language_mic_status__enabled.place_forget()
+            case "SPEAKER_ON":
+                vrct_gui.sls__box_target_language_speaker_status__enabled.place(relx=0.1, rely=0.2, anchor="center")
+            case "SPEAKER_OFF":
+                vrct_gui.sls__box_target_language_speaker_status__enabled.place_forget()
+
+    def updateSelectableTranslationEngineList(self, selectable_translation_engines_list):
+        translation_dict = {item: item for item in selectable_translation_engines_list}
+        translation_dict["CTranslate2"] = i18n.t("main_window.translator_ctranslate2")
+
+        vrct_gui.translation_engine_dropdown_menu_window.updateDropdownMenuValues(
+            dropdown_menu_widget_id="translation_engine_dropdown_menu",
+            dropdown_menu_values=translation_dict,
+        )
 
 
     # Config Window
@@ -670,13 +1002,19 @@ class View():
             additional_widget.grid()
         self._closeMicWordFilterList()
 
+    def showRestartButton(self):
+        self._showRestartButton()
+
+    def hideRestartButton(self):
+        self._hideRestartButton()
 
     def showRestartButtonIfRequired(self, locale:Union[None,str]=None):
         is_restart_required = not (
             self.restart_required_configs_pre_data.appearance_theme == config.APPEARANCE_THEME and
             self.restart_required_configs_pre_data.ui_scaling == config.UI_SCALING and
             self.restart_required_configs_pre_data.font_family == config.FONT_FAMILY and
-            self.restart_required_configs_pre_data.ui_language == config.UI_LANGUAGE
+            self.restart_required_configs_pre_data.ui_language == config.UI_LANGUAGE and
+            self.restart_required_configs_pre_data.is_reset_button_displayed_for_translation == config.IS_RESET_BUTTON_DISPLAYED_FOR_TRANSLATION
         )
 
         if locale is None:
@@ -704,6 +1042,44 @@ class View():
     def setWidgetsStatus_ConfigWindowCompactModeSwitch_Normal():
         vrct_gui.config_window.setting_box_compact_mode_switch_box.configure(state="normal")
 
+
+    @staticmethod
+    def setWidgetsStatus_changeWeightType_Pending():
+        vrct_gui.config_window.sb__switch_use_translation_feature.configure(state="disabled")
+        vrct_gui._changeConfigWindowWidgetsStatus(
+            status="disabled",
+            target_names=[
+                "sb__switch_use_translation_feature",
+                "sb__optionmenu_ctranslate2_weight_type",
+            ]
+        )
+    @staticmethod
+    def setWidgetsStatus_changeWeightType_Done():
+        vrct_gui.config_window.sb__switch_use_translation_feature.configure(state="normal")
+        vrct_gui._changeConfigWindowWidgetsStatus(
+            status="normal",
+            target_names=[
+                "sb__switch_use_translation_feature",
+                "sb__optionmenu_ctranslate2_weight_type",
+            ]
+        )
+
+
+    def updateSelectedCtranslate2WeightType(self, selected_weight_type:str):
+        self.view_variable.VAR_CTRANSLATE2_WEIGHT_TYPE.set(self.getSelectableCtranslate2WeightTypeDict()[selected_weight_type])
+
+    def setLatestCTranslate2WeightType(self):
+        selected_weight_type = self.getSelectableCtranslate2WeightTypeDict()[config.WEIGHT_TYPE]
+        self.view_variable.VAR_CTRANSLATE2_WEIGHT_TYPE.set(selected_weight_type)
+
+
+    def openCtranslate2WeightTypeWidget(self):
+        vrct_gui.config_window.sb__use_translation_feature.grid(pady=0)
+        vrct_gui.config_window.sb__ctranslate2_weight_type.grid()
+
+    def closeCtranslate2WeightTypeWidget(self):
+        vrct_gui.config_window.sb__use_translation_feature.grid(pady=(0,1))
+        vrct_gui.config_window.sb__ctranslate2_weight_type.grid_remove()
 
 
     def openMicEnergyThresholdWidget(self):
@@ -882,7 +1258,7 @@ class View():
         self._clearEntryBox(vrct_gui.config_window.sb__entry_mic_word_filter_list)
 
 
-# Widget Control (Whole)
+# Widget Control
     def foregroundOnIfForegroundEnabled(self):
         if config.ENABLE_FOREGROUND:
             self.foregroundOn()
@@ -909,6 +1285,50 @@ class View():
     def setMainWindowTextboxUiSize(custom_font_size_scale:float):
         vrct_gui.print_to_textbox.setTagsSettings(custom_font_size_scale=custom_font_size_scale)
 
+    def setMainWindowMessageBoxRatio(self, message_box_ratio:int):
+        if message_box_ratio < config.MESSAGE_BOX_RATIO_RANGE[0] or message_box_ratio > config.MESSAGE_BOX_RATIO_RANGE[1]:
+            raise ValueError(f"Input must be between {config.MESSAGE_BOX_RATIO_RANGE[0]} and {config.MESSAGE_BOX_RATIO_RANGE[1]} (inclusive)")
+
+        vrct_gui.main_bg_container.grid_rowconfigure(tuple(range(config.MESSAGE_BOX_RATIO_RANGE[0], config.MESSAGE_BOX_RATIO_RANGE[1]+2)), weight=1)
+        textbox_ratio = int((config.MESSAGE_BOX_RATIO_RANGE[1]+1) - message_box_ratio)
+        message_box_row = int(textbox_ratio + 1)
+        message_box_rowwpan = int((config.MESSAGE_BOX_RATIO_RANGE[1]+1) - textbox_ratio)
+        vrct_gui.main_textbox_container.grid(row=1, rowspan=textbox_ratio, column=0, sticky="nsew")
+        vrct_gui.main_entry_message_container.grid(row=message_box_row, rowspan=message_box_rowwpan, column=0, sticky="nsew")
+
+        new_send_message_button_width = int(self.settings.main.uism.SEND_MESSAGE_BUTTON_RATE_WIDTH * message_box_ratio)
+
+        if new_send_message_button_width > self.settings.main.uism.SEND_MESSAGE_BUTTON_MAX_WIDTH:
+            new_send_message_button_width = self.settings.main.uism.SEND_MESSAGE_BUTTON_MAX_WIDTH
+
+        if new_send_message_button_width < self.settings.main.uism.SEND_MESSAGE_BUTTON_MIN_WIDTH:
+            new_send_message_button_width = self.settings.main.uism.SEND_MESSAGE_BUTTON_MIN_WIDTH
+
+        vrct_gui.main_send_message_button_container.grid_columnconfigure(0, weight=0, minsize=new_send_message_button_width)
+
+    @staticmethod
+    def changeMainWindowSendMessageButton(status:str):
+        match (status):
+            case "hide":
+                vrct_gui.main_send_message_button_container.grid_remove()
+                vrct_gui.config_window.after(200, vrct_gui.config_window.lift)
+            case "show" | "show_and_disable_enter_key":
+                vrct_gui.main_send_message_button_container.grid()
+                vrct_gui.config_window.after(200, vrct_gui.config_window.lift)
+
+    def _enteredSwapLanguagesButton(self):
+        self.view_variable.VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON.set(i18n.t("main_window.swap_button_label"))
+        vrct_gui.sls__both_direction_desc.configure(
+            text_color=self.settings.main.ctm.SLS__BOX_ARROWS_SWAP_BUTTON_TEXT_COLOR,
+        )
+
+    def _leavedSwapLanguagesButton(self):
+        if config.USE_TRANSLATION_FEATURE is True:
+            self.view_variable.VAR_LABEL_BOTH_DIRECTION_SWAP_BUTTON.set(i18n.t("main_window.translate_each_other_label"))
+        vrct_gui.sls__both_direction_desc.configure(
+            text_color=self.settings.main.ctm.SLS__BOX_ARROWS_TEXT_COLOR,
+        )
+
 # Function
     def _adjustUiSizeAndRestart(self):
         current_percentage = int(config.UI_SCALING.replace("%",""))
@@ -920,21 +1340,6 @@ class View():
         else:
             self._hideConfirmationModal()
         # ※Below 40% of the UI size is not supported, and we cannot handle it at this time.
-
-
-
-    def translationEngineLimitErrorProcess(self):
-        # turn off translation switch.
-        vrct_gui.translation_switch_box.deselect()
-        vrct_gui.translation_frame.markToggleManually(False)
-
-        # disable translation feature.
-        vrct_gui._changeMainWindowWidgetsStatus("disabled", ["translation_switch"], to_hold_state=True)
-
-        # print system message that mention to stopped translation feature.
-        view.printToTextbox_TranslationEngineLimitError()
-        view.showTheLimitOfTranslationEngineConfirmationModal()
-
 
 
 
@@ -971,23 +1376,6 @@ class View():
         self.view_variable.VAR_LABEL_CONFIRMATION_MODAL_DENY_BUTTON.set(i18n.t("main_window.confirmation_message.deny_update_software"))
         self.view_variable.VAR_LABEL_CONFIRMATION_MODAL_ACCEPT_BUTTON.set(i18n.t("main_window.confirmation_message.accept_update_software"))
         vrct_gui.confirmation_modal.show()
-
-
-
-
-
-    def showTheLimitOfTranslationEngineConfirmationModal(self):
-        self.foregroundOffIfForegroundEnabled()
-
-        self.view_variable.VAR_LABEL_MAIN_WINDOW_COVER_MESSAGE.set("")
-        vrct_gui.main_window_cover.show()
-
-        self.view_variable.CALLBACK_HIDE_CONFIRMATION_MODAL=self._hideInformationModal
-        self.view_variable.CALLBACK_ACCEPTED_CONFIRMATION_MODAL=self._hideInformationModal
-
-        self.view_variable.VAR_MESSAGE_CONFIRMATION_MODAL.set(i18n.t("main_window.confirmation_message.translation_engine_limit_error"))
-        self.view_variable.VAR_LABEL_CONFIRMATION_MODAL_ACCEPT_BUTTON.set(i18n.t("main_window.confirmation_message.accept_translation_engine_limit_error"))
-        vrct_gui.information_modal.show(hide_title_bar=False, close_when_focusout=False)
 
 
 
@@ -1060,6 +1448,13 @@ class View():
 
 
 # Set GuiVariable (view_variable)
+    def setGuiVariable_SelectedTranslationEngine(self, value):
+        if value == "CTranslate2":
+            self.view_variable.VAR_SELECTED_TRANSLATION_ENGINE.set(self.TEXT_TRANSLATOR_CTRANSLATE2)
+            value = self.TEXT_TRANSLATOR_CTRANSLATE2
+        else:
+            self.view_variable.VAR_SELECTED_TRANSLATION_ENGINE.set(i18n.t("main_window.translator") + ": " + value)
+
     def setGuiVariable_MicEnergyThreshold(self, value):
         self.view_variable.VAR_MIC_ENERGY_THRESHOLD__SLIDER.set(int(value))
         self.view_variable.VAR_MIC_ENERGY_THRESHOLD__ENTRY.set(str(value))
@@ -1096,7 +1491,11 @@ class View():
         self.view_variable.VAR_SPEAKER_MAX_PHRASES.set(str(value))
 
 
+    def setGuiVariable_OscIpAddress(self, value):
+        self.view_variable.VAR_OSC_IP_ADDRESS.set(str(value))
 
+    def setGuiVariable_OscPort(self, value):
+        self.view_variable.VAR_OSC_PORT.set(int(value))
 
 
 
@@ -1122,8 +1521,14 @@ class View():
             case "SpeakerMaxPhrases":
                 self.setGuiVariable_SpeakerMaxPhrases(config.INPUT_SPEAKER_MAX_PHRASES)
 
-            case "MessageFormat":
-                self.setMessageFormatEntryWidgets(config.MESSAGE_FORMAT)
+            case "SendMessageFormat":
+                self.setSendMessageFormat_EntryWidgets(config.SEND_MESSAGE_FORMAT)
+            case "SendMessageFormatWithT":
+                self.setSendMessageFormatWithT_EntryWidgets(config.SEND_MESSAGE_FORMAT_WITH_T)
+            case "ReceivedMessageFormat":
+                self.setReceivedMessageFormat_EntryWidgets(config.RECEIVED_MESSAGE_FORMAT)
+            case "ReceivedMessageFormatWithT":
+                self.setReceivedMessageFormatWithT_EntryWidgets(config.RECEIVED_MESSAGE_FORMAT_WITH_T)
 
             case _:
                 raise ValueError(f"No matching case for target_name: {target_name}")
@@ -1166,9 +1571,6 @@ class View():
     def printToTextbox_TranslationEngineLimitError(self):
         self._printToTextbox_Info(i18n.t("main_window.textbox_system_message.translation_engine_limit_error"))
 
-
-    # def printToTextbox_OSCError(self): [Deprecated]
-    #     self._printToTextbox_Info("OSC is not enabled, please enable OSC and rejoin. or turn off the \"Send Message To VRChat\" setting")
 
     def printToTextbox_DetectedByWordFilter(self, detected_message):
         self._printToTextbox_Info(i18n.t("main_window.textbox_system_message.detected_by_word_filter", detected_message=detected_message))
@@ -1230,10 +1632,10 @@ class View():
 # Message Box
     @staticmethod
     def getTextFromMessageBox():
-        return vrct_gui.entry_message_box.get()
+        return vrct_gui.entry_message_box.get('1.0', "end-1c")
 
     def clearMessageBox(self):
-        self._clearEntryBox(vrct_gui.entry_message_box)
+        self._clearTextBox(vrct_gui.entry_message_box)
 
 
 
@@ -1274,10 +1676,21 @@ class View():
         self.clearErrorMessage()
 
 
-    def callbackBindFocusOut_MessageFormat(self, _e=None):
-        self.setLatestConfigVariable("MessageFormat")
+    def callbackBindFocusOut_SendMessageFormat(self, _e=None):
+        self.setLatestConfigVariable("SendMessageFormat")
         self.clearErrorMessage()
 
+    def callbackBindFocusOut_SendMessageFormatWithT(self, _e=None):
+        self.setLatestConfigVariable("SendMessageFormatWithT")
+        self.clearErrorMessage()
+
+    def callbackBindFocusOut_ReceivedMessageFormat(self, _e=None):
+        self.setLatestConfigVariable("ReceivedMessageFormat")
+        self.clearErrorMessage()
+
+    def callbackBindFocusOut_ReceivedMessageFormatWithT(self, _e=None):
+        self.setLatestConfigVariable("ReceivedMessageFormatWithT")
+        self.clearErrorMessage()
 
 
 
@@ -1359,11 +1772,30 @@ class View():
         )
 
 
-    def showErrorMessage_MessageFormat(self):
+    def showErrorMessage_SendMessageFormat(self):
         self._showErrorMessage(
-            vrct_gui.config_window.sb__entry_message_format_2,
-            self._makeInvalidValueErrorMessage(i18n.t("config_window.message_format.error_message"))
+            vrct_gui.config_window.sb__entry_send_message_format_1,
+            self._makeInvalidValueErrorMessage(i18n.t("config_window.send_message_format.error_message"))
         )
+
+    def showErrorMessage_SendMessageFormatWithT(self):
+        self._showErrorMessage(
+            vrct_gui.config_window.sb__entry_send_message_format_with_t_2,
+            self._makeInvalidValueErrorMessage(i18n.t("config_window.send_message_format_with_t.error_message"))
+        )
+
+    def showErrorMessage_ReceivedMessageFormat(self):
+        self._showErrorMessage(
+            vrct_gui.config_window.sb__entry_received_message_format_1,
+            self._makeInvalidValueErrorMessage(i18n.t("config_window.received_message_format.error_message"))
+        )
+
+    def showErrorMessage_ReceivedMessageFormatWithT(self):
+        self._showErrorMessage(
+            vrct_gui.config_window.sb__entry_received_message_format_with_t_2,
+            self._makeInvalidValueErrorMessage(i18n.t("config_window.received_message_format_with_t.error_message"))
+        )
+
 
     @staticmethod
     def _makeInvalidValueErrorMessage(error_message):
@@ -1373,9 +1805,17 @@ class View():
         self.view_variable.VAR_ERROR_MESSAGE.set(message)
         vrct_gui._showErrorMessage(target_widget=target_widget)
 
-
     @staticmethod
     def extractMessageFormat(text):
+        split_result = text.split("[message]")
+        result_data = SimpleNamespace(
+            before = split_result[0],
+            after = split_result[1],
+        )
+        return result_data
+
+    @staticmethod
+    def extractMessageFormatWithT(text):
         import re
         message_index = text.find("[message]")
         translation_index = text.find("[translation]")

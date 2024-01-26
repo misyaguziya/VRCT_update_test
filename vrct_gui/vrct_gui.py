@@ -43,11 +43,21 @@ class VRCT_GUI(CTk):
     def _showGUI(self):
         self.attributes("-alpha", 0)
         self.deiconify()
-        self.geometry("{}x{}".format(
-            self.settings.main.uism.MAIN_AREA_MIN_WIDTH + self.settings.main.uism.SIDEBAR_MIN_WIDTH,
-            self.winfo_height()
-        ))
-        setGeometryToCenterOfScreen(root_widget=self)
+        if self.settings.main.to_restore_main_window_geometry is True:
+            self.geometry("{}x{}+{}+{}".format(
+                self.settings.main.geometry.width,
+                self.settings.main.geometry.height,
+                self.settings.main.geometry.x_pos,
+                self.settings.main.geometry.y_pos,
+            ))
+        else:
+            self.geometry("{}x{}".format(
+                self.settings.main.uism.MAIN_AREA_MIN_WIDTH + self.settings.main.uism.SIDEBAR_MIN_WIDTH,
+                self.winfo_height()
+            ))
+            setGeometryToCenterOfScreen(root_widget=self)
+
+
         if self._view_variable.IS_MAIN_WINDOW_SIDEBAR_COMPACT_MODE is True:
             self._enableMainWindowSidebarCompactMode()
         fadeInAnimation(self, steps=5, interval=0.008)
@@ -61,14 +71,37 @@ class VRCT_GUI(CTk):
         self.settings = settings
         self._view_variable = view_variable
 
+        self.translation_engine_dropdown_menu_window = _CreateDropdownMenuWindow(
+            settings=settings.dropdown_menu_window,
+            view_variable=self._view_variable,
+
+            window_additional_y_pos=self.settings.main.uism.SLS__DROPDOWN_MENU_WINDOW_ADDITIONAL_Y_POS,
+            window_border_width=self.settings.main.uism.SLS__DROPDOWN_MENU_WINDOW_BORDER_WIDTH,
+            scrollbar_ipadx=self.settings.main.uism.SLS__DROPDOWN_MENU_SCROLLBAR_IPADX,
+            scrollbar_width=self.settings.main.uism.SLS__DROPDOWN_MENU_SCROLLBAR_WIDTH,
+            value_ipadx=self.settings.main.uism.SLS__DROPDOWN_MENU_VALUE_IPADX,
+            value_ipady=self.settings.main.uism.SLS__DROPDOWN_MENU_VALUE_IPADY,
+            value_pady=self.settings.main.uism.SLS__DROPDOWN_MENU_VALUE_PADY,
+            value_font_size=self.settings.main.uism.SLS__DROPDOWN_MENU_VALUE_FONT_SIZE,
+            dropdown_menu_default_min_width=self.settings.main.uism.SLS__DROPDOWN_MENU_VALUE_DEFAULT_MIN_WIDTH,
+
+            window_bg_color=self.settings.main.ctm.SLS__DROPDOWN_MENU_WINDOW_BG_COLOR,
+            window_border_color=self.settings.main.ctm.SLS__DROPDOWN_MENU_WINDOW_BORDER_COLOR,
+            values_bg_color=self.settings.main.ctm.SLS__DROPDOWN_MENU_BG_COLOR,
+            values_hovered_bg_color=self.settings.main.ctm.SLS__DROPDOWN_MENU_HOVERED_BG_COLOR,
+            values_clicked_bg_color=self.settings.main.ctm.SLS__DROPDOWN_MENU_CLICKED_BG_COLOR,
+            values_text_color=self.settings.main.ctm.BASIC_TEXT_COLOR,
+        )
+
         createMainWindowWidgets(
             vrct_gui=self,
             settings=self.settings.main,
             view_variable=self._view_variable
         )
 
+        # For Config Window
         self.dropdown_menu_window = _CreateDropdownMenuWindow(
-            settings=self.settings.config_window,
+            settings=self.settings.dropdown_menu_window,
             view_variable=self._view_variable,
 
             window_additional_y_pos=self.settings.config_window.uism.SB__DROPDOWN_MENU_WINDOW_ADDITIONAL_Y_POS,
@@ -217,14 +250,15 @@ class VRCT_GUI(CTk):
 
 
 
-    def _changeMainWindowWidgetsStatus(self, status, target_names, to_hold_state:bool=False):
+    def _changeMainWindowWidgetsStatus(self, status, target_names, to_lock_state:bool=False, release_locked_state:bool=False):
         _changeMainWindowWidgetsStatus(
             vrct_gui=self,
             settings=self.settings.main,
             view_variable=self._view_variable,
             status=status,
             target_names=target_names,
-            to_hold_state=to_hold_state,
+            to_lock_state=to_lock_state,
+            release_locked_state=release_locked_state,
         )
 
     def _changeConfigWindowWidgetsStatus(self, status, target_names):

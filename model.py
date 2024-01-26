@@ -1,8 +1,8 @@
+import tempfile
 from zipfile import ZipFile
 from subprocess import Popen
 from os import makedirs as os_makedirs
 from os import path as os_path
-from os import remove as os_remove
 from shutil import copyfile
 from datetime import datetime
 from logging import getLogger, FileHandler, Formatter, INFO
@@ -12,6 +12,8 @@ from threading import Thread, Event
 from requests import get as requests_get
 import webbrowser
 
+from tqdm import tqdm
+from typing import Callable
 from flashtext import KeywordProcessor
 from models.translation.translation_translator import Translator
 from models.transcription.transcription_utils import getInputDevices, getDefaultOutputDevice
@@ -20,8 +22,9 @@ from models.transcription.transcription_recorder import SelectedMicRecorder, Sel
 from models.transcription.transcription_recorder import SelectedMicEnergyRecorder, SelectedSpeakeEnergyRecorder
 from models.transcription.transcription_transcriber import AudioTranscriber
 from models.xsoverlay.notification import xsoverlayForVRCT
-from models.translation.translation_languages import translatorEngine, translation_lang
+from models.translation.translation_languages import translation_lang
 from models.transcription.transcription_languages import transcription_lang
+from models.translation.utils import checkCTranslate2Weight
 from config import config
 
 class threadFnc(Thread):
@@ -43,15 +46,6 @@ class threadFnc(Thread):
             self.fnc(*self._args, **self._kwargs)
 
 class Model:
-    # Languages available for both transcription and translation
-    SUPPORTED_LANGUAGES = [
-        'Afrikaans', 'Arabic', 'Basque', 'Bulgarian', 'Catalan', 'Chinese', 'Croatian',
-        'Czech', 'Danish', 'Dutch', 'English', 'Filipino', 'Finnish', 'French', 'German',
-        'Greek', 'Hebrew', 'Hindi', 'Hungarian', 'Indonesian', 'Italian', 'Japanese',
-        'Korean', 'Lithuanian', 'Malay', 'Norwegian', 'Polish', 'Portuguese', 'Romanian',
-        'Russian', 'Serbian', 'Slovak', 'Slovenian', 'Spanish', 'Swedish', 'Thai', 'Turkish',
-        'Ukrainian', 'Vietnamese'
-        ]
     _instance = None
 
     def __new__(cls):
@@ -71,23 +65,22 @@ class Model:
         self.speaker_energy_recorder = None
         self.speaker_energy_plot_progressbar = None
         self.translator = Translator()
+        if config.USE_TRANSLATION_FEATURE is True:
+            self.translator.changeCTranslate2Model(config.PATH_LOCAL, config.WEIGHT_TYPE)
         self.keyword_processor = KeywordProcessor()
 
-    def resetTranslator(self):
-        del self.translator
-        self.translator = Translator()
+    def checkCTranslatorCTranslate2ModelWeight(self):
+        return checkCTranslate2Weight(config.PATH_LOCAL, config.WEIGHT_TYPE)
+
+    def changeTranslatorCTranslate2Model(self):
+        self.translator.changeCTranslate2Model(config.PATH_LOCAL, config.WEIGHT_TYPE)
 
     def resetKeywordProcessor(self):
         del self.keyword_processor
         self.keyword_processor = KeywordProcessor()
 
-    def authenticationTranslator(self, choice_translator=None, auth_key=None):
-        if choice_translator is None:
-            choice_translator = config.CHOICE_TRANSLATOR
-        if auth_key is None:
-            auth_key = config.AUTH_KEYS[choice_translator]
-
-        result = self.translator.authentication(choice_translator, auth_key)
+    def authenticationTranslatorDeepLAuthKey(self, auth_key):
+        result = self.translator.authenticationDeepLAuthKey(auth_key)
         return result
 
     def startLogger(self):
@@ -106,13 +99,21 @@ class Model:
         self.logger.disabled = True
         self.logger = None
 
-    @staticmethod
-    def getListLanguageAndCountry():
+    def getListLanguageAndCountry(self):
+        transcription_langs = list(transcription_lang.keys())
+        tl_keys = translation_lang.keys()
+        translation_langs = []
+        for tl_key in tl_keys:
+            for lang in translation_lang[tl_key]["source"]:
+                translation_langs.append(lang)
+        translation_langs = list(set(translation_langs))
+        supported_langs = list(filter(lambda x: x in transcription_langs, translation_langs))
+
         langs = []
-        for lang in model.SUPPORTED_LANGUAGES:
+        for lang in supported_langs:
             for country in transcription_lang[lang]:
                 langs.append(f"{lang}\n({country})")
-        return langs
+        return sorted(langs)
 
     @staticmethod
     def getLanguageAndCountry(select):
@@ -121,84 +122,70 @@ class Model:
         country = parts[1][1:-1]
         return language, country
 
-    def findTranslationEngine(self, source_lang, target_lang):
+    def findTranslationEngines(self, source_lang, target_lang):
         compatible_engines = []
-        for engine in translatorEngine:
-            source_languages = translation_lang.get(engine, {}).get("source", {})
-            target_languages = translation_lang.get(engine, {}).get("target", {})
-            if source_lang in source_languages and target_lang in target_languages:
+        for engine in list(translation_lang.keys()):
+            languages = translation_lang.get(engine, {}).get("source", {})
+            if source_lang in languages and target_lang in languages:
                 compatible_engines.append(engine)
-        engine_name = compatible_engines[0]
-
-        if engine_name == "DeepL" and config.AUTH_KEYS["DeepL_API"] is not None:
-            if self.authenticationTranslator(engine_name, config.AUTH_KEYS["DeepL_API"]) is True:
-                engine_name = "DeepL_API"
-        elif engine_name == "DeepL_API" and config.AUTH_KEYS["DeepL_API"] is None:
-            engine_name = "DeepL"
-
-        return engine_name
+        if "DeepL_API" in compatible_engines:
+            if config.AUTH_KEYS["DeepL_API"] is None:
+                compatible_engines.remove('DeepL_API')
+        return compatible_engines
 
     def getInputTranslate(self, message):
-        translator_name=config.CHOICE_TRANSLATOR
+        translation_success_flag = True
+        translator_name=config.CHOICE_INPUT_TRANSLATOR
         source_language=config.SOURCE_LANGUAGE
         target_language=config.TARGET_LANGUAGE
         target_country = config.TARGET_COUNTRY
 
-        if translator_name == "DeepL_API":
-            if target_language == "English":
-                if target_country in ["United States", "Canada", "Philippines"]:
-                    target_language = "English American"
-                else:
-                    target_language = "English British"
-            elif target_language == "Portuguese":
-                if target_country in ["Portugal"]:
-                    target_language = "Portuguese European"
-                else:
-                    target_language = "Portuguese Brazilian"
-        elif translator_name == "DeepL":
-            if target_language in ["English American", "English British"]:
-                target_language = "English"
-            elif target_language in ["Portuguese European", "Portuguese Brazilian"]:
-                target_language = "Portuguese"
-
         translation = self.translator.translate(
                         translator_name=translator_name,
                         source_language=source_language,
                         target_language=target_language,
+                        target_country=target_country,
                         message=message
                 )
-        return translation
+
+        # 翻訳失敗時のフェールセーフ処理
+        if translation is False:
+            translation_success_flag = False
+            translation = self.translator.translate(
+                                translator_name="CTranslate2",
+                                source_language=source_language,
+                                target_language=target_language,
+                                target_country=target_country,
+                                message=message
+                        )
+        return translation, translation_success_flag
 
     def getOutputTranslate(self, message):
-        translator_name=config.CHOICE_TRANSLATOR
+        translation_success_flag = True
+        translator_name=config.CHOICE_OUTPUT_TRANSLATOR
         source_language=config.TARGET_LANGUAGE
         target_language=config.SOURCE_LANGUAGE
-        target_country = config.SOURCE_COUNTRY
-
-        if translator_name == "DeepL_API":
-            if target_language == "English":
-                if target_country in ["United States", "Canada", "Philippines"]:
-                    target_language = "English American"
-                else:
-                    target_language = "English British"
-            elif target_language == "Portuguese":
-                if target_country in ["Portugal"]:
-                    target_language = "Portuguese European"
-                else:
-                    target_language = "Portuguese Brazilian"
-        elif translator_name == "DeepL":
-            if target_language in ["English American", "English British"]:
-                target_language = "English"
-            elif target_language in ["Portuguese European", "Portuguese Brazilian"]:
-                target_language = "Portuguese"
+        target_country=config.SOURCE_COUNTRY
 
         translation = self.translator.translate(
                         translator_name=translator_name,
                         source_language=source_language,
                         target_language=target_language,
+                        target_country=target_country,
                         message=message
                 )
-        return translation
+
+        # 翻訳失敗時のフェールセーフ処理
+        if translation is False:
+            translation_success_flag = False
+            translation = self.translator.translate(
+                                translator_name="CTranslate2",
+                                source_language=source_language,
+                                target_language=target_language,
+                                target_country=target_country,
+                                message=message
+                        )
+        return translation, translation_success_flag
 
     def addKeywords(self):
         for f in config.INPUT_MIC_WORD_FILTER:
@@ -265,26 +252,34 @@ class Model:
         return update_flag
 
     @staticmethod
-    def updateSoftware(restart:bool=True):
+    def updateSoftware(restart:bool=True, func=None):
         filename = 'VRCT.zip'
         program_name = 'VRCT.exe'
         folder_name = '_internal'
         tmp_directory_name = 'tmp'
         batch_name = 'update.bat'
-        current_directory = config.LOCAL_PATH
+        current_directory = config.PATH_LOCAL
 
         try:
             res = requests_get(config.GITHUB_URL)
             assets = res.json()['assets']
             url = [i["browser_download_url"] for i in assets if i["name"] == filename][0]
-            res = requests_get(url, stream=True)
-            os_makedirs(os_path.join(current_directory, tmp_directory_name), exist_ok=True)
-            with open(os_path.join(current_directory, tmp_directory_name, filename), 'wb') as file:
-                for chunk in res.iter_content(chunk_size=1024):
-                    file.write(chunk)
-            with ZipFile(os_path.join(current_directory, tmp_directory_name, filename)) as zf:
-                zf.extractall(os_path.join(current_directory, tmp_directory_name))
-            os_remove(os_path.join(current_directory, tmp_directory_name, filename))
+            with tempfile.TemporaryDirectory() as tmp_path:
+                res = requests_get(url, stream=True)
+                file_size = int(res.headers.get('content-length', 0))
+                pbar = tqdm(total=file_size, unit="B", unit_scale=True)
+                total_chunk = 0
+                with open(os_path.join(tmp_path, filename), 'wb') as file:
+                    for chunk in res.iter_content(chunk_size=1024*5):
+                        file.write(chunk)
+                        pbar.update(len(chunk))
+                        if isinstance(func, Callable):
+                            total_chunk += len(chunk)
+                            func(total_chunk/file_size)
+                    pbar.close()
+
+                with ZipFile(os_path.join(tmp_path, filename)) as zf:
+                    zf.extractall(os_path.join(current_directory, tmp_directory_name))
             copyfile(os_path.join(current_directory, folder_name, "batch", batch_name), os_path.join(current_directory, batch_name))
             command = [os_path.join(current_directory, batch_name), program_name, folder_name, tmp_directory_name, str(restart)]
             Popen(command, cwd=current_directory)
@@ -296,7 +291,7 @@ class Model:
         program_name = 'VRCT.exe'
         folder_name = '_internal'
         batch_name = 'restart.bat'
-        current_directory = config.LOCAL_PATH
+        current_directory = config.PATH_LOCAL
         copyfile(os_path.join(current_directory, folder_name, "batch", batch_name), os_path.join(current_directory, batch_name))
         command = [os_path.join(current_directory, batch_name), program_name]
         Popen(command, cwd=current_directory)
